@@ -1992,7 +1992,11 @@ function bodySize(){
   const T = P.tv;
   const block = blockFor(c);
   const band  = bandFor(c);
-  const common = [43,50,55,65,75,85,98];
+  /* Shortcuts only — the dealer can type any size. 48, 77 and 83 are here
+     because they're OLED panel sizes and the LCD ladder skips them; a dealer
+     specifying an OLED job shouldn't have to reach for the keyboard. Shared
+     across every product, so keep it to sizes that are real somewhere. */
+  const common = [43,48,50,55,65,75,77,83,85,98];
 
   let h = `<p class="note step-help">${esc(T.why)}</p>`;
 
