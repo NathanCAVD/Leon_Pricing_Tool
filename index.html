@@ -253,8 +253,11 @@ p{margin:0}
   content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;
   border:solid #fff;border-width:0 1.5px 1.5px 0;transform:rotate(43deg);
 }
-.addon .label{font-size:15.5px}
-.addon .sub{font-size:13px;color:var(--muted);margin-top:2px}
+/* Both are spans, so they need display:block or the sub runs on from the label
+   as one paragraph and the margin-top below is silently ignored. Affects every
+   add-on on every product, not just Tc Fit's. */
+.addon .label{font-size:15.5px;display:block}
+.addon .sub{font-size:13px;color:var(--muted);margin-top:2px;display:block;line-height:1.45}
 .addon .price{margin-left:auto;font-size:15px;color:var(--muted);white-space:nowrap;padding-left:12px}
 
 /* ---------- buttons ---------- */
@@ -628,8 +631,13 @@ const LEON = {
     baseSku: "TcFIT-U",
     order: 1,
     steps: ["soundbar","size","mount","grille","extras"],
-    intro: "A Tonecase built around your soundbar. Ships with the UMB below-TV bracket and a custom-cut grille as standard.",
-    pickLine: "Fits the soundbar to the screen. Bracket and custom-cut grille included.",
+    /* "custom-cut grille as standard" used to sit in both these lines. It has
+       been softened to "grille" now that contouring is an explicit tick box at
+       the last step: telling a dealer up front that the cut grille is included
+       and then asking whether they want it reads as a contradiction. The point
+       that it costs nothing is made where the choice is made. */
+    intro: "A Tonecase built around your soundbar. Ships with the UMB below-TV bracket and a grille as standard, contoured to your screen at no charge if you want it.",
+    pickLine: "Fits the soundbar to the screen. Bracket and grille included.",
 
     /* ---- step 1: soundbar ---- */
     soundbars: [
@@ -711,12 +719,23 @@ const LEON = {
     },
 
     /* ---- step 5: add-ons ----
+       Contouring is free on Tc Fit — Leon's sheet says it is included in the
+       price — but it is still a service Leon either perform or don't, so the
+       dealer has to tell us which. Hence a £0 tick box rather than silence:
+       priced at 0 so it prints as a "No charge" line, and `offLabel` states the
+       negative on the sheet when it is left unticked, because "included in the
+       price" and "not requested" would otherwise look identical to Leon.
+
        Leon for Life is deliberately absent. It is a replacement grille ordered
        later, when the TV changes — not something specified alongside the
        original build. Don't add it back from Leon's sheet. */
-    addOns: [],
+    addOns: [
+      { id:"contour", sku:"", label:"Grille contoured to the screen", price:0,
+        sub:"No charge on Tc Fit. Follows the outline of the set, with cut-outs for the logo and the IR window.",
+        offLabel:"grille not contoured" }
+    ],
 
-    railNote: "Bracket and custom grille included as standard."
+    railNote: "Bracket included as standard, and contouring the grille is free — say whether you want it at the last step."
   },
 
   /* ========================================================================
@@ -1324,6 +1343,12 @@ const curP = () => prodOf(state.cfg);
 const money = n => M.currency + Number(n).toLocaleString("en-GB",
   { minimumFractionDigits: n % 1 === 0 ? 0 : 2, maximumFractionDigits:2 });
 
+/* For an individual price-list line only, never a total. A line at £0 is a
+   service the dealer asked for that Leon don't charge for — Tc Fit grille
+   contouring is the first — and "£0" reads like a pricing error on a sheet a
+   dealer forwards. Say it in words instead. */
+const lineMoney = n => Number(n) === 0 ? "No charge" : money(n);
+
 const stepsFor = cfg => {
   const P = prodOf(cfg);
   return ["product"].concat(P ? P.steps : []);
@@ -1597,6 +1622,13 @@ function describe(cfg){
   cfg.addOns.forEach(id => {
     const a = P.addOns.find(x => x.id === id);
     if (a && addOnAvailable(cfg, a)) bits.push(a.label);
+  });
+  /* An add-on carrying `offLabel` is one where NOT having it has to be said out
+     loud — a free service left unticked reads exactly like a free service
+     nobody thought about. Only Tc Fit contouring sets it. */
+  P.addOns.forEach(a => {
+    if (a.offLabel && addOnAvailable(cfg, a) && !cfg.addOns.includes(a.id))
+      bits.push(a.offLabel);
   });
   return bits.join(" · ");
 }
@@ -2114,7 +2146,7 @@ function refreshSizeStep(){
 function bodyMount(){
   const c = state.cfg;
   const P = curP();
-  let h = `<p class="note step-help">The bracket and a custom-cut grille are in the box. Below the screen is the standard build.</p>
+  let h = `<p class="note step-help">The bracket and the grille are in the box. Below the screen is the standard build.</p>
     <div class="options stack">`;
   P.mounting.forEach(m => {
     h += `<button class="opt" data-pick="mount" data-val="${m.id}" aria-pressed="${c.mount === m.id}">
@@ -2177,7 +2209,7 @@ function bodyExtras(){
             <span class="label">${esc(a.label)}</span>
             <span class="sub">${esc(a.sub)}</span>
           </span>
-          <span class="price tabular">+${money(a.price)}</span>
+          <span class="price tabular">${a.price ? "+" + money(a.price) : "No charge"}</span>
         </button>`;
     });
     h += `</div>`;
@@ -2296,7 +2328,7 @@ function renderRail(){
   if (shown){
     h += `<div class="lines">`;
     shown.lines.forEach(l => {
-      h += `<div class="line"><span class="l">${esc(l.label)}</span><span class="v tabular">${money(l.dealer)}</span></div>`;
+      h += `<div class="line"><span class="l">${esc(l.label)}</span><span class="v tabular">${lineMoney(l.dealer)}</span></div>`;
     });
     h += `<div class="line total"><span class="l">Dealer, ex VAT</span><span class="v tabular">${money(shown.dealer)}</span></div>
     </div>`;
@@ -2434,7 +2466,7 @@ function renderOutput(){
       </tr>`;
     item.price.lines.forEach(l => {
       h += `<tr class="sub"><td></td><td colspan="2">${esc(l.label)}</td>
-            <td class="r tabular">${money(l.dealer)}${item.qty > 1 ? " ea" : ""}</td></tr>`;
+            <td class="r tabular">${lineMoney(l.dealer)}${l.dealer && item.qty > 1 ? " ea" : ""}</td></tr>`;
     });
   });
 
@@ -2479,7 +2511,7 @@ function sheetText(){
     L.push(`${i+1}. ${item.price.sku}  ×${item.qty}`);
     L.push(`   ${describe(item.cfg)}`);
     item.price.lines.forEach(l =>
-      L.push(`   · ${l.label} — ${money(l.dealer)}${item.qty > 1 ? " ea" : ""}`));
+      L.push(`   · ${l.label} — ${lineMoney(l.dealer)}${l.dealer && item.qty > 1 ? " ea" : ""}`));
     L.push(`   ${money(item.price.dealer * item.qty)} dealer, ex VAT`);
     L.push("");
   });
