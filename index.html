@@ -211,6 +211,10 @@ p{margin:0}
 }
 .chip:hover{border-color:var(--line-2)}
 .chip[aria-pressed="true"]{border-color:var(--oak);background:var(--oak-wash);color:var(--oak-ink)}
+/* A value the product settles for itself. Reads as a statement of fact and
+   must never look pressable — that is the whole point of it. */
+.given{margin-top:12px;font-size:15px;color:var(--ink-80)}
+.given .why{color:var(--muted-2);font-size:13.5px}
 .band-readout{
   margin-top:22px;padding:16px 18px;background:var(--paper-2);border-radius:var(--radius);
   max-width:520px;
@@ -1571,13 +1575,26 @@ function priceConfig(cfg){
 }
 
 /* ---- the TV: brand + model + diagonal ---- */
+
+/* Where one manufacturer makes the only set the product fits, the brand is not
+   a decision — FrameBar is built for the Samsung Frame and nothing else. The
+   answer is settled here rather than asked for, and everything below treats it
+   as already given, so a dealer is never stopped by a question with one answer.
+   Fixed only when there is a single brand AND no "another brand" escape hatch. */
+function fixedBrand(P){
+  const T = P && P.tv;
+  return (T && !T.otherLabel && T.brands && T.brands.length === 1) ? T.brands[0] : null;
+}
 function tvComplete(c){
-  if (!c.tvBrand) return false;
+  if (!c.tvBrand && !fixedBrand(prodOf(c))) return false;
   if (c.tvBrand === "__other" && !(c.tvBrandOther || "").trim()) return false;
   return !!(c.tvModel || "").trim();
 }
 function tvBrandName(c){
-  return c.tvBrand === "__other" ? (c.tvBrandOther || "").trim() : (c.tvBrand || "");
+  if (c.tvBrand === "__other") return (c.tvBrandOther || "").trim();
+  /* Falls back to the fixed brand so it still prints on the sheet even if
+     state never carried it — a basket item saved before this existed, say. */
+  return c.tvBrand || fixedBrand(prodOf(c)) || "";
 }
 function tvLabel(c){
   return [tvBrandName(c), (c.tvModel || "").trim()].filter(Boolean).join(" ");
@@ -2033,17 +2050,24 @@ function bodySize(){
   let h = `<p class="note step-help">${esc(T.why)}</p>`;
 
   /* brand */
-  h += `<div class="eyebrow">Brand</div>
-    <div class="chips" style="margin-top:12px">`;
-  T.brands.forEach(b => {
-    h += `<button class="chip" data-brand="${esc(b)}" aria-pressed="${c.tvBrand === b}">${esc(b)}</button>`;
-  });
-  /* No escape hatch where only one manufacturer makes the set — FrameBar is
-     built for the Samsung Frame and nothing else, so offering "another brand"
-     would invite an answer the product can't take. */
-  if (T.otherLabel)
-    h += `<button class="chip" data-brand="__other" aria-pressed="${c.tvBrand === "__other"}">${esc(T.otherLabel)}</button>`;
-  h += `</div>`;
+  h += `<div class="eyebrow">Brand</div>`;
+  const fixed = fixedBrand(P);
+  if (fixed){
+    /* Stated, not offered. A lone chip that has to be pressed before the step
+       will complete reads as a label, not a control — dealers filled in the
+       model and the size on FrameBar and then found Continue still dead. */
+    h += `<div class="given">${esc(fixed)}<span class="why"> · the only brand ${esc(P.name)} is built for</span></div>`;
+  } else {
+    h += `<div class="chips" style="margin-top:12px">`;
+    T.brands.forEach(b => {
+      h += `<button class="chip" data-brand="${esc(b)}" aria-pressed="${c.tvBrand === b}">${esc(b)}</button>`;
+    });
+    /* No escape hatch where only one manufacturer makes the set — offering
+       "another brand" would invite an answer the product can't take. */
+    if (T.otherLabel)
+      h += `<button class="chip" data-brand="__other" aria-pressed="${c.tvBrand === "__other"}">${esc(T.otherLabel)}</button>`;
+    h += `</div>`;
+  }
 
   if (c.tvBrand === "__other"){
     h += `<div class="field" style="margin-top:20px">
@@ -2640,6 +2664,10 @@ function wireSteps(){
       if (state.cfg.product !== v){
         const keep = { qty:state.cfg.qty };
         state.cfg = Object.assign(blankCfg(), keep, { product:v });
+        /* A product that fits one brand of set answers the brand itself, so
+           the state carries it from the moment the product is chosen. Null
+           for every other product, which is what blankCfg already had. */
+        state.cfg.tvBrand = fixedBrand(prodOf(state.cfg));
       }
     } else if (k === "core"){
       state.cfg.core = v;
