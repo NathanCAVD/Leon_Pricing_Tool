@@ -406,6 +406,29 @@ p{margin:0}
 .sheet tfoot td{border-bottom:none;padding-top:16px;font-size:16px}
 .sheet .terms{margin-top:26px;padding-top:20px;border-top:1px solid var(--line);display:grid;gap:8px}
 
+/* Shipping, said so it cannot be skimmed past. Dealers were reading straight
+   over the terms block at the foot of the sheet, so this runs full width
+   directly under the title, and again beside the total. Ruled box rather
+   than a colour, because the sheet is printed as often as it is read. */
+.shipbar{
+  margin:22px 0 26px;padding:13px 16px;
+  border:1.5px solid var(--ink);border-radius:var(--radius);
+  display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+}
+.shipbar .big{font-size:16.5px;font-weight:500;color:var(--ink);letter-spacing:-0.01em}
+.shipbar .small{font-size:13.5px;color:var(--muted)}
+.sheet tfoot td.shipfoot{
+  padding-top:10px;font-size:13.5px;color:var(--ink);font-weight:500;text-align:right;
+}
+/* The under-75″ second-bracket allowance. Reads as a caution, not a charge —
+   it is deliberately not in the total. */
+.sheet tfoot td.allow{
+  padding-top:10px;font-size:13px;color:var(--muted);text-align:right;font-weight:400;
+}
+@media (max-width:560px){
+  .shipbar{flex-direction:column;gap:4px}
+}
+
 /* ---------- footer ---------- */
 .foot{
   border-top:1px solid var(--line);margin-top:auto;
@@ -436,6 +459,9 @@ p{margin:0}
   .output{margin:0}
   .sheet{border:none;padding:0}
   .sheet td,.sheet th{border-color:#ccc}
+  /* The shipping bar is the whole point of the sheet being unambiguous —
+     it must survive the PDF, and keep its rule when colours are dropped. */
+  .shipbar{border-color:#000 !important;break-inside:avoid;page-break-inside:avoid}
   /* Keep the co-branding on the printed sheet, in colour */
   .sheet-marks{border-bottom-color:#ccc}
   .logo-cavd path{fill:var(--cavd-blue) !important;
@@ -599,6 +625,20 @@ const LEON = {
        every size. One line, no per-product override — same reasoning as the
        lead-time note. Nothing here should ever read as a delivered price. */
     shippingNote: "Shipping is quoted separately when you confirm the order.",
+    /* Short enough to survive a skim. Dealers were reading past the terms
+       block at the foot of the sheet, so this is the loud version and it
+       renders twice — under the sheet title and again beside the total. */
+    shippingLoud: "Shipping is not included.",
+    /* Leon Support, 13 August 2026: "It can vary depending on the speaker
+       model and the size of the TV. Typically, we start adding more brackets
+       for soundbars with 75-inch displays and larger. It is better to have
+       four mounting points instead of two when the cabinet gets wider."
+       Nathan's rule from that: two brackets from 75″ up, priced. Below 75″
+       we price one and say a second may be wanted, rather than pad a total
+       for a bracket nobody has asked for. */
+    twinBracketFrom: 75,
+    twinBracketWhy: "Two mounting points — Leon specify a second bracket from 75″ up.",
+    bracketAllowanceNote: "Leon may recommend a second bracket for support on a wide cabinet.",
     quoteNote: "This is a price list, not a quote. Send it over and we'll come back with an official quote.",
     /* A browser cannot attach a file to an email — mailto: has no attachment
        parameter — so there is no button that both opens a draft and encloses
@@ -607,6 +647,32 @@ const LEON = {
        .printhide, so anything there is gone by the time they have the PDF.
        Built from contact.send just below the LEON object. */
     sendNote: ""
+  },
+
+  /* ---- every bracket Leon list, priced exactly once ----------------------
+     Positions inside a product name SKUs; the money and the unit come from
+     here, so a Leon price change is one edit in one place rather than a hunt
+     through five products. Prices are UK DEALER ex VAT from the Edge Frame
+     sheet, 1 July 2025. Leon's Profile and Architectural brackets are listed
+     PAIR rather than EACH — none are reachable yet, but `unit` is carried so
+     the day one is, the sheet can say so. */
+  bracketCatalogue: {
+    "HzUMB":       { price:190, unit:"each" },
+    "HzUMB-OS":    { price:320, unit:"each" },
+    "HzOMB":       { price:190, unit:"each" },
+    "HzOMB-OS":    { price:320, unit:"each" },
+    "HzMMB":       { price:140, unit:"each" },
+    "HzMMB-2X":    { price:275, unit:"each" },
+    "HzMMB-UT":    { price:140, unit:"each" },
+    "HzMMB-UT-2X": { price:275, unit:"each" },
+    "HzFLSH":      { price:80,  unit:"each" },
+    "HzFLSH-2X":   { price:165, unit:"each" },
+    /* Leon's sheet reads "for Horizon Interactive FIT or Tonecase TcFIT".
+       TcFIT is the range name, not a separate SKU — Leon's own October 2025
+       guide heads the family "TcFIT for Sonos Soundbars" with only the -U
+       SKUs under it, and describes EDGE-FIT as "for TcFIT-U or Interactive
+       FIT", the same pairing with the -U present. So this fits TcFIT-U. */
+    "AWB":         { price:120, unit:"each" }
   },
 
   /* Shown on the product step and used for the masthead before a pick is made */
@@ -634,7 +700,7 @@ const LEON = {
     family: "Tonecase",
     baseSku: "TcFIT-U",
     order: 1,
-    steps: ["soundbar","size","mount","grille","extras"],
+    steps: ["soundbar","size","bracket","grille","extras"],
     /* "custom-cut grille as standard" used to sit in both these lines. It has
        been softened to "grille" now that contouring is an explicit tick box at
        the last step: telling a dealer up front that the cut grille is included
@@ -683,12 +749,47 @@ const LEON = {
     ],
     flatPriceNote: "Same price all the way to 74″. Screen size doesn't change what you pay until 75″.",
 
-    /* ---- step 3: mounting ---- */
-    mounting: [
-      { id:"below", label:"Below the TV",  sub:"UMB bracket, included as standard", tag:"Included", price:0 },
-      { id:"above", label:"Above the TV",  sub:"Not a standard option",  route:"contact", reason:"mounting" },
-      { id:"wall",  label:"On the wall",   sub:"Away from the screen",   route:"contact", reason:"mounting" }
-    ],
+    /* ---- step 3: mounting. Same structure as Horizon's, so one set of
+       bracket logic serves both — but Tc Fit ships with its UnderMount in
+       the box, where Horizon prices every bracket separately. ---- */
+    brackets: {
+      help: "The bracket and the grille are in the box, and the same bracket takes the soundbar above or below the screen. Below is the standard build.",
+      movementHelp: "Fixed to the screen means the soundbar travels with it — the one you want on a swing arm or a pull-out mount. Fixed to the wall means the screen moves without it.",
+      positions: [
+        { id:"under", label:"Below the TV", short:"below the TV",
+          sub:"UnderMount — fixed to the screen, so it moves with it",
+          includedSku:"UMB", includedTag:"In the box",
+          /* Leon price TcFIT-U as a SYSTEM with "includes UMB bracket", and
+             say nothing about what a second one costs or whether -OS ships
+             with two. Doubling an included part would invent a charge, so
+             the 75″ rule states itself here and prices nothing. */
+          noTwin:true, twinIsQuestion:true },
+        /* Answered by Leon Support, 13 August 2026: "The UMB bracket comes
+           with the TCFIT-U. The OMB bracket is the same thing, just flipped
+           180°... if we know this ahead of time, we can put the rails on the
+           back of the soundbar so you do not need to flip the cabinet 180°."
+
+           So above the screen costs nothing — it is the same included part —
+           but it is only free of hassle if Leon are told at order. That is
+           exactly why `orderNote` exists: it prints on the sheet the dealer
+           forwards, where it reaches the person who acts on it. Left as a
+           deliberate choice rather than folded into "below", because saying
+           nothing is how the cabinet arrives needing flipping on site. Sits
+           next to "below" because it is literally the same bracket. */
+        { id:"above", label:"Above the TV", short:"above the TV",
+          sub:"The same bracket, inverted — tell Leon at order",
+          includedSku:"UMB", includedTag:"In the box",
+          orderNote:"mounting above the screen, so Leon fit the rails to the back of the cabinet",
+          noTwin:true, twinIsQuestion:true },
+        /* AWB, £120. Leon's line reads "Horizon Interactive FIT or Tonecase
+           TcFIT" — TcFIT being the range, so it covers TcFIT-U. This was a
+           "speak to the team" dead end until that was confirmed. */
+        { id:"wall",  label:"On the wall", short:"on the wall",
+          /* No SKU in the wording — bodyBracket prefixes it already. */
+          sub:"Adjustable yoke — fixed to the wall, so the screen moves without it",
+          flatSku:"AWB" }
+      ]
+    },
 
     /* ---- step 4: grille ---- */
     grille: {
@@ -837,6 +938,10 @@ const LEON = {
     /* Nothing to add on at spec time — see the note on Tc Fit. */
     addOns: [],
 
+    /* Leon: "TcBar and TcBar-OS come standard with wall mount bracket." No
+       bracket step, so it is said here and printed by describe() — otherwise
+       a dealer reading the sheet can't tell mounting was dealt with. */
+    bracketIncluded: "wall bracket included",
     railNote: "Wall bracket and custom grille included as standard."
   },
 
@@ -923,32 +1028,53 @@ const LEON = {
     /* Where we point a dealer when the model they picked has a gap */
     gapAlternative: "hzultima",
 
-    /* ---- step: bracket. Priced separately, unlike Tonecase. ---- */
+    /* ---- step: bracket. Priced separately, unlike Tonecase. ----
+       The sub-lines all say the same thing in two halves: what Leon call it,
+       and — the bit that decides the job — whether it fixes to the screen or
+       to the wall. A dealer putting the TV on a swing arm needs the speaker
+       fixed to the screen, or it stays behind when the screen comes out. */
     brackets: {
       help: "Horizon doesn't ship with a bracket. Tell us where it sits and we'll pick the right one — the variant follows the screen size.",
+      /* The distinction that actually decides an articulated install. */
+      movementHelp: "Fixed to the screen means the speaker travels with it — the one you want on a swing arm or a pull-out mount. Fixed to the wall means the screen moves without it.",
       positions: [
         /* Leon size the -OS bracket from 85″, not the 75″ that takes the
            speaker to -OS. An 80″ job is an -OS speaker on a standard bracket. */
-        { id:"under", label:"Below the TV", short:"below the TV", sub:"UnderMount — fixed to the screen",
-          sku:{ std:"HzUMB", os:"HzUMB-OS" }, price:{ std:190, os:320 }, osFromDiagonal:85,
-          osNote:"oversize" },
-        { id:"over",  label:"Above the TV", short:"above the TV", sub:"OverMount — fixed to the screen",
-          sku:{ std:"HzOMB", os:"HzOMB-OS" }, price:{ std:190, os:320 }, osFromDiagonal:85,
-          osNote:"oversize" },
-        /* MatchMount is listed per tier: HzMMB for Reference, HzMMB-UT for
-           Ultra-Thin. Hz33 (Performance) is named in neither — see routes. */
-        { id:"match", label:"On the wall", short:"on the wall", sub:"MatchMount — adjustable, off the screen",
-          tierSku:{ ut:"HzMMB-UT", ref:"HzMMB" }, price:140,
-          reason:"bracketTier" },
+        { id:"under", label:"Below the TV", short:"below the TV",
+          sub:"UnderMount — fixed to the screen, so it moves with it",
+          sku:{ std:"HzUMB", os:"HzUMB-OS" }, osFromDiagonal:85, osNote:"oversize" },
+        { id:"over",  label:"Above the TV", short:"above the TV",
+          sub:"OverMount — fixed to the screen, so it moves with it",
+          sku:{ std:"HzOMB", os:"HzOMB-OS" }, osFromDiagonal:85, osNote:"oversize" },
+        /* MatchMount is listed per tier — HzMMB for Reference, HzMMB-UT for
+           Ultra-Thin — and each tier has an oversize variant. Hz33
+           (Performance) is named in neither, so it still asks.
+
+           ⚠ The -2X suffix does NOT mean dual displays. Leon's own store
+           lists the flush part as "HzFLSH-OS : (HzFLSH-2X)" — one product,
+           two names — and describes HzMMB-OS purely as the oversize wall
+           mount. The UK sheet's "designed for dual displays" means a Horizon
+           cabinet built to span two screens, i.e. a very wide bar needing two
+           brackets. It is a size, not a choice, and CAVD never specify across
+           two displays for residential anyway. */
+        { id:"match", label:"On the wall", short:"on the wall",
+          sub:"MatchMount — adjustable, fixed to the wall",
+          tierSku:{ ut:{ std:"HzMMB-UT", os:"HzMMB-UT-2X" },
+                    ref:{ std:"HzMMB",    os:"HzMMB-2X"    } },
+          osFromDiagonal:75, osNote:"oversize, two mounting points",
+          reason:"bracketTier",
+          /* The -2X part IS the pair, so the 75″ rule must not double it. */
+          noTwinFromOs:true },
         /* Leon: the twin FlushMount is required past 72″ of speaker width, and
            the speaker matches the screen. A 16:9 screen is 0.87 × its diagonal
            wide, so 72″ of width lands at roughly an 83″ diagonal. */
-        { id:"flush", label:"Flush to the wall", short:"flush to the wall", sub:"Sits under 1/8″ off the wall",
-          sku:{ std:"HzFLSH", os:"HzFLSH-2X" }, price:{ std:80, os:165 }, osFromDiagonal:83,
-          osNote:"twin brackets, needed at this width" }
+        { id:"flush", label:"Flush to the wall", short:"flush to the wall",
+          sub:"FlushMount — sits under 1/8″ off the wall",
+          sku:{ std:"HzFLSH", os:"HzFLSH-2X" }, osFromDiagonal:83,
+          osNote:"twin brackets, needed at this width",
+          /* HzFLSH-2X is itself the twin part, so the 75″ rule stops here. */
+          noTwinFromOs:true }
       ],
-      dual: { id:"dual", label:"Across two displays", sub:"A twin-bracket job",
-              route:"contact", reason:"dualDisplay" },
       none: { id:"none", label:"No bracket needed", sub:"Mounting handled another way", price:0 }
     },
 
@@ -991,8 +1117,15 @@ const LEON = {
   /* ==========================================================================
      FRAMEBAR — Horizon's cabinet rebuilt for the Samsung Frame. Same price
      shape as Horizon (models × channels × band), so it needs no new engine.
-     Two cabinets, no bracket step and no finish step: the finish matches the
-     Samsung bezel rather than Leon's own wood range.
+     Two cabinets and no finish step: the finish matches the Samsung bezel
+     rather than Leon's own wood range.
+
+     It DOES take a bracket, and none is included. Leon's own configurator
+     (leonspeakers.com/framebar-ux and /framebar44ux, checked 13 August 2026)
+     requires a bracket choice on both models and lists all four Horizon
+     positions against them. Both FrameBar cabinets are ultra-thin, so the
+     wall mount is the -UT part — which is why these positions carry plain
+     SKUs rather than Horizon's tier map: there is only one tier here.
      ====================================================================== */
   "framebar": {
     id: "framebar",
@@ -1000,10 +1133,10 @@ const LEON = {
     family: "Horizon",
     baseSku: "FrameBar",
     order: 4,
-    steps: ["channels","size","model","grille","extras"],
+    steps: ["channels","size","model","bracket","grille","extras"],
     intro: "Built for the Samsung Frame, with a cabinet reveal that reads as part of the frame rather than a bar hung under it. Choose the channels, then the cabinet.",
     pickLine: "For the Samsung Frame. Cabinet reveal matched to the bezel.",
-    railNote: "Finish matches the Samsung bezel, so there's no finish step — tell us which accessory frame you're using.",
+    railNote: "Finish matches the Samsung bezel, so there's no finish step. The bracket is priced separately — it isn't in the box.",
 
     channels: [
       { id:"lcr", label:"Left, centre and right", short:"LCR",    suffix:"",    sub:"Three channels in one bar" },
@@ -1017,8 +1150,19 @@ const LEON = {
       brands:["Samsung"],
       why:"FrameBar is built to the width of a Samsung Frame and finished to match its bezel, so Leon need the exact set — the model and the year, not just the size.",
       modelLabel:"Frame model and year",
-      modelHelp:"As it reads on the box, with the year. If you already know the Samsung accessory bezel SKU and colour, add it here — Leon match the finish to it.",
-      modelPlaceholder:"e.g. QE65LS03D 2024 · bezel VG-SCFA65TKB"
+      modelHelp:"As it reads on the box, with the year.",
+      modelPlaceholder:"e.g. QE65LS03D 2024",
+      /* Its own field rather than a line in modelHelp, because Leon match the
+         FrameBar finish to the bezel and the colour is the part they match
+         to. Buried in the model box it was being left out. Deliberately not
+         required — a dealer specifying early may not have picked the bezel
+         yet, and blocking them would repeat the brand-chip problem. Left
+         blank it still prints, as "to confirm", so the gap is visible to
+         Leon rather than silently absent. */
+      bezelLabel:"Frame bezel finish and colour",
+      bezelHelp:"Leon match the FrameBar to the Samsung bezel, so the colour matters as much as the size. Add the bezel SKU too if you have it.",
+      bezelPlaceholder:"e.g. Teak · VG-SCFA65TKB",
+      bezelMissing:"bezel finish and colour to confirm"
     },
     /* Leon list FrameBar to 90″ and no further — over that is a conversation,
        and it is a different one from Horizon's, so it gets its own route. */
@@ -1043,6 +1187,38 @@ const LEON = {
         sub:"4″ audiophile drivers · 7″ high · 2.75″ deep",
         price:{ lcr:[2165,2505], lr:[1960,2210], c:[1770,2005] } }
     ],
+
+    /* ---- step: bracket. Priced separately, as on Horizon. Both cabinets
+       are ultra-thin, so the wall mount is the -UT part on either model and
+       no tier lookup is needed. Thresholds match Horizon's: Leon size the
+       bigger single UMB/OMB from 85″, the paired MatchMount from 75″ per
+       CAVD's two-brackets-over-75″ rule, and the twin FlushMount from the
+       83″ that Leon's "over 72″ of speaker width" works out at. ---- */
+    brackets: {
+      help: "FrameBar doesn't ship with a bracket — Leon ask you to choose one. Tell us where it sits and we'll pick the right part for the screen size.",
+      movementHelp: "Fixed to the screen means the bar travels with it — the one you want if the Frame is on a swing arm or a pull-out mount. Fixed to the wall means the screen moves without it.",
+      positions: [
+        { id:"under", label:"Below the TV", short:"below the TV",
+          sub:"UnderMount — fixed to the screen, so it moves with it",
+          sku:{ std:"HzUMB", os:"HzUMB-OS" }, osFromDiagonal:85, osNote:"oversize" },
+        { id:"over",  label:"Above the TV", short:"above the TV",
+          sub:"OverMount — fixed to the screen, so it moves with it",
+          sku:{ std:"HzOMB", os:"HzOMB-OS" }, osFromDiagonal:85, osNote:"oversize" },
+        { id:"match", label:"On the wall", short:"on the wall",
+          sub:"MatchMount — adjustable, fixed to the wall",
+          sku:{ std:"HzMMB-UT", os:"HzMMB-UT-2X" }, osFromDiagonal:75,
+          osNote:"oversize, two mounting points", noTwinFromOs:true },
+        { id:"flush", label:"Flush to the wall", short:"flush to the wall",
+          sub:"FlushMount — sits under 1/8″ off the wall",
+          sku:{ std:"HzFLSH", os:"HzFLSH-2X" }, osFromDiagonal:83,
+          osNote:"twin brackets, needed at this width", noTwinFromOs:true }
+      ],
+      /* Leon's configurator offers "already own the bracket" and "resting on
+         a flat surface" as separate free choices. One line covers both — a
+         dealer who has the part doesn't need us to price it. */
+      none: { id:"none", label:"No bracket needed",
+              sub:"Already have the bracket, or mounting handled another way", price:0 }
+    },
 
     grille: {
       standard: { id:"standard", label:"Standard Black", sub:"Included", price:0 },
@@ -1218,11 +1394,10 @@ const LEON = {
       body:"Anything outside the Sonos range is a custom soundbar, and the CAVD team handle those directly. Tell us the soundbar and the TV and we'll take it from there.",
       cta:"Speak to the team"
     },
-    mounting: {
-      title:"That one's a custom quote.",
-      body:"Tc Fit ships set up to sit below the screen. Above the TV or out on the wall means a different bracket, so we price it with Leon rather than guess. Quick job — tell us the room and we'll come back with a number.",
-      cta:"Let's work this out with you"
-    },
+    /* Every Tc Fit mounting position is now a real answer — below and above
+       are the same included bracket, and the wall is a priced AWB — so
+       nothing routes from that step any more. Kept as reference copy only;
+       nothing renders it. See the note on Tc Fit's `above` position. */
     oversize: {
       title:"Bigger than the standard range.",
       body:"Past 120″ we build to the screen. Give us the exact model and we'll spec it properly.",
@@ -1263,11 +1438,11 @@ const LEON = {
       body:"Leon build FrameBar for Frame TVs up to 90″. Tell us the set you're working with and we'll find you something that fits it.",
       cta:"Speak to the team"
     },
-    dualDisplay: {
-      title:"Two screens is a bespoke build.",
-      body:"Leon build a twin bracket for dual displays, and the width comes from how the two screens sit. Tell us both sets and the gap between them and we'll spec it properly.",
-      cta:"Let's work this out with you"
-    }
+    /* Nathan, 13 August 2026: specifying across two displays is a commercial
+       job, not a residential one, and CAVD never put it in front of a dealer.
+       The route that used to live here is gone, along with the bracket option
+       that fed it — the -2X SKUs are the oversize parts, not dual-display
+       ones. Don't reintroduce either. */
   },
 
   blocks: {
@@ -1292,7 +1467,6 @@ const STEP_TITLES = {
   channels: "How many channels?",
   size:     "Which TV?",
   model:    "Which cabinet?",
-  mount:    "Where does it sit?",
   bracket:  "How does it mount?",
   finish:   "Which finish?",
   grille:   "Which grille?",
@@ -1307,9 +1481,8 @@ const blankCfg = () => ({
   core:null,
   soundbar:null,
   channels:null,
-  tvBrand:null, tvBrandOther:"", tvModel:"", diagonal:null,
+  tvBrand:null, tvBrandOther:"", tvModel:"", tvBezel:"", diagonal:null,
   model:null,
-  mount:null,
   bracket:null,
   finish:null,
   wantPaint:false,
@@ -1440,31 +1613,101 @@ function baseLine(cfg, band){
 /* Which bracket a mounting position resolves to, given tier and screen size.
    Null means Leon don't list one for this combination — that routes, it never
    silently prices. */
+/* How many of this bracket the job takes. Leon add a second mounting point
+   from 75″ up; below that one is specified and the sheet says a second may
+   still be wanted. A position that is already a pair by SKU — the -2X
+   MatchMount, the twin FlushMount — opts out, or we would sell four. */
+function bracketQty(cfg, pos){
+  if (!pos || pos.noTwin) return 1;
+  if (cfg.diagonal == null) return 1;
+  if (pos.noTwinFromOs && pos.osFromDiagonal != null &&
+      cfg.diagonal >= pos.osFromDiagonal) return 1;
+  return cfg.diagonal >= LEON.meta.twinBracketFrom ? 2 : 1;
+}
+
+/* Price and unit come from the one catalogue, never from the position. */
+const bracketPrice = sku => {
+  const b = LEON.bracketCatalogue[sku];
+  return b ? b.price : null;
+};
+
 function bracketLineFor(cfg, pos){
   if (!pos) return null;
+  /* Routed positions are a conversation, not a line on the sheet. */
+  if (pos.route) return null;
+
+  /* In the box: it still prints, at no charge, so the sheet records which
+     bracket the dealer is getting rather than leaving it unsaid. */
+  if (pos.includedSku)
+    return { sku:pos.includedSku, qty:1, each:0, dealer:0, included:true,
+             label:`${pos.includedSku} — ${pos.short}, included` };
+
+  const d    = cfg.diagonal;
+  const isOs = pos.osFromDiagonal != null && d != null && d >= pos.osFromDiagonal;
+
+  let sku;
   if (pos.tierSku){
     const tier = tierOf(cfg);
     if (!tier) return null;
-    const sku = pos.tierSku[tier];
-    if (!sku) return null;                // Hz33 MatchMount — ask Leon
-    return { sku, label:`${sku} — MatchMount, ${pos.short}`, dealer:pos.price };
+    const entry = pos.tierSku[tier];
+    if (!entry) return null;             // Hz33 MatchMount — ask Leon
+    /* A tier carries either one SKU or a std/os pair sized like the rest. */
+    if (typeof entry === "string") sku = entry;
+    else {
+      if (d == null) return null;        // can't size it yet
+      sku = isOs ? entry.os : entry.std;
+    }
+    if (!sku) return null;
+  } else if (pos.flatSku){
+    sku = pos.flatSku;
+  } else {
+    if (d == null) return null;
+    sku = isOs ? pos.sku.os : pos.sku.std;
   }
-  const d  = cfg.diagonal;
-  if (d == null) return null;
-  const os = d >= pos.osFromDiagonal;
-  const sku = os ? pos.sku.os : pos.sku.std;
+
+  const each = bracketPrice(sku);
+  if (each == null) return null;         // SKU not in the catalogue — say nothing
+  const qty  = bracketQty(cfg, pos);
+
   return {
-    sku,
-    label: `${sku} — ${pos.short}${os ? `, ${pos.osNote}` : ""}`,
-    dealer: os ? pos.price.os : pos.price.std
+    sku, qty, each, dealer: each * qty,
+    label: `${sku}${qty > 1 ? ` × ${qty}` : ""} — ${pos.short}`
+         + (isOs && pos.osNote ? `, ${pos.osNote}` : "")
+         + (qty > 1 ? `, two mounting points` : "")
   };
 }
 
-function bracketLine(cfg){
+function bracketPosFor(cfg){
   const P = prodOf(cfg);
   if (!P || !P.brackets || !cfg.bracket || cfg.bracket === "none") return null;
-  const pos = P.brackets.positions.find(x => x.id === cfg.bracket);
-  return bracketLineFor(cfg, pos);
+  return P.brackets.positions.find(x => x.id === cfg.bracket) || null;
+}
+
+function bracketLine(cfg){
+  return bracketLineFor(cfg, bracketPosFor(cfg));
+}
+
+/* What to tell a dealer under 75″: one bracket is specified, and Leon may
+   still want a second on a wide cabinet. Returns what to allow for it.
+   `amount: 0` with `unknown: true` is Tc Fit's included bracket — a second
+   is a real possibility, but Leon publish no price for one, so the sheet
+   raises it without inventing a number. Nothing at all at 75″ and up, where
+   the second bracket is already on the list, or where the position is
+   already a pair by SKU. */
+function bracketAllowanceFor(cfg){
+  const pos = bracketPosFor(cfg);
+  if (!pos) return null;
+  const line = bracketLineFor(cfg, pos);
+  if (!line) return null;
+  /* An included bracket raises the question at EVERY size, not just below
+     75″ — at 85″ Leon would want two mounting points, and Tc Fit's price
+     covers one bracket with no published cost for a second. Silence there
+     would be the worst answer of the three. */
+  if (pos.twinIsQuestion) return { amount:0, unknown:true };
+  if (pos.noTwin) return null;
+  if (cfg.diagonal == null || cfg.diagonal >= LEON.meta.twinBracketFrom) return null;
+  if (line.qty > 1) return null;
+  return line.each ? { amount:line.each, unknown:false } : null;
 }
 const colourById = (cfg, id) => {
   const P = prodOf(cfg);
@@ -1499,13 +1742,11 @@ function routeFor(cfg){
     const bar = P.soundbars.find(s => s.id === cfg.soundbar);
     if (bar && bar.route === "contact") return bar.reason;
   }
-  if (P.mounting){
-    const mount = P.mounting.find(m => m.id === cfg.mount);
-    if (mount && mount.route === "contact") return mount.reason;
-  }
-  if (P.brackets && cfg.bracket){
-    if (cfg.bracket === "dual") return P.brackets.dual.reason;
+  if (P.brackets && cfg.bracket && cfg.bracket !== "none"){
     const pos = P.brackets.positions.find(x => x.id === cfg.bracket);
+    /* Routed outright — Leon publish no price for this mounting on this
+       product (Tc Fit above the TV). */
+    if (pos && pos.route === "contact") return pos.reason;
     /* A position with no bracket for this tier is a question, not a price */
     if (pos && pos.tierSku && tierOf(cfg) && !pos.tierSku[tierOf(cfg)]) return pos.reason;
   }
@@ -1545,7 +1786,8 @@ function priceConfig(cfg){
 
   if (band.adder) lines.push({ sku:"", label:band.adderLabel, dealer:band.adder });
 
-  /* Bracket is a separate line on Horizon; on Tonecase it is in the box. */
+  /* Bracket is a separate line on Horizon; on Tc Fit the UnderMount is in the
+     box and prints at no charge, while the AWB wall yoke is a real charge. */
   const br = bracketLine(cfg);
   if (br) lines.push(br);
 
@@ -1570,7 +1812,10 @@ function priceConfig(cfg){
     sku: base.sku,
     productId: P.id,
     productName: P.name,
-    confirm: band.confirm || null
+    confirm: band.confirm || null,
+    /* Money the dealer should keep back for a second bracket Leon may ask
+       for. Never added to `dealer` — it is an allowance, not a charge. */
+    bracketAllowance: bracketAllowanceFor(cfg)
   };
 }
 
@@ -1599,6 +1844,17 @@ function tvBrandName(c){
 function tvLabel(c){
   return [tvBrandName(c), (c.tvModel || "").trim()].filter(Boolean).join(" ");
 }
+/* FrameBar's bezel, for anywhere the config is written out. It prints whether
+   or not it was filled in: Leon match the FrameBar finish to this, so a blank
+   one is an open question that has to be visible on the sheet, not an
+   omission that reads as "nothing to say". Empty string on every other
+   product, which have no bezel to match. */
+function bezelLabel(cfg){
+  const T = (prodOf(cfg) || {}).tv;
+  if (!T || !T.bezelLabel) return "";
+  const v = (cfg.tvBezel || "").trim();
+  return v ? `bezel ${v}` : T.bezelMissing;
+}
 
 /* Human description of a config, for summaries and the price list */
 function describe(cfg){
@@ -1617,18 +1873,27 @@ function describe(cfg){
   const tv = tvLabel(cfg);
   if (tv) bits.push(tv + (cfg.diagonal != null ? " · " + cfg.diagonal + "″" : ""));
   else if (cfg.diagonal != null) bits.push(cfg.diagonal + "″ TV");
-  if (P.mounting){
-    const mount = P.mounting.find(m => m.id === cfg.mount);
-    if (mount) bits.push(mount.id === "below" ? "below-TV UMB bracket" : mount.label.toLowerCase());
-  }
+  const bez = bezelLabel(cfg);
+  if (bez) bits.push(bez);
+  /* The bracket prints on the sheet a dealer forwards to Leon, so it carries
+     the count as well as the SKU — "HzUMB — below the TV" and "HzUMB × 2 —
+     below the TV" are different orders. */
   if (P.brackets && cfg.bracket){
     if (cfg.bracket === "none") bits.push("no bracket");
     else {
-      const br = bracketLine(cfg);
+      const br  = bracketLine(cfg);
       const pos = P.brackets.positions.find(x => x.id === cfg.bracket);
-      if (br) bits.push(`${br.sku} — ${pos.short}`);
+      if (br) bits.push(`${br.sku}${br.qty > 1 ? ` × ${br.qty}` : ""} — ${pos.short}`
+                      + (br.included ? ", included" : ""));
+      /* Something Leon must know at order rather than discover on the bench.
+         It prints here because this line is what the dealer forwards. */
+      if (pos && pos.orderNote) bits.push(pos.orderNote);
     }
   }
+  /* Products where Leon put the bracket in the box and there is no step to
+     answer — it still belongs on the sheet, or the dealer can't tell whether
+     mounting was considered at all. */
+  if (P.bracketIncluded) bits.push(P.bracketIncluded);
   if (P.finish && cfg.finish){
     const f = finishById(cfg, cfg.finish);
     if (f) bits.push((f.name || f.label) + " finish");
@@ -1657,6 +1922,15 @@ function basketTotals(){
     dealer,
     /* Which products are on the list — drives the output sheet heading */
     productNames: [...new Set(state.basket.map(i => i.price.productName))],
+    /* Second-bracket allowance across the whole list. `amount` is money to
+       keep back and is deliberately NOT in `dealer`; `unknown` means at least
+       one line raises the question without a price Leon have published. */
+    bracketAllowance: state.basket.reduce((acc, i) => {
+      const a = i.price.bracketAllowance;
+      if (!a) return acc;
+      return { amount: acc.amount + a.amount * i.qty,
+               unknown: acc.unknown || a.unknown };
+    }, { amount:0, unknown:false }),
     /* Neither Tonecase alone makes a 5.1 Leon system, so the discount never
        auto-applies. Encoded here so Phase 3 only has to set this. */
     systemDiscountApplies:false
@@ -1676,7 +1950,6 @@ function answered(id){
     case "channels": return c.channels !== null;
     case "size":     return tvComplete(c) && c.diagonal !== null && !blockFor(c);
     case "model":    return c.model !== null && !!baseLine(c, bandFor(c));
-    case "mount":    return c.mount !== null;
     case "bracket":  return c.bracket !== null;
     case "finish":   return c.finish !== null;
     case "grille":   return c.grille.type === "standard" ||
@@ -1700,13 +1973,12 @@ function routedStepIndex(){
     if (bar && bar.route === "contact") return at("soundbar");
   }
   if (c.diagonal != null && c.diagonal > P.diagonal.max) return at("size");
-  if (P.mounting){
-    const m = P.mounting.find(x => x.id === c.mount);
-    if (m && m.route === "contact") return at("mount");
-  }
-  if (P.brackets && c.bracket){
-    if (c.bracket === "dual") return at("bracket");
+  if (P.brackets && c.bracket && c.bracket !== "none"){
     const pos = P.brackets.positions.find(x => x.id === c.bracket);
+    /* Two ways a bracket becomes a conversation: the position is routed
+       outright (Tc Fit above the TV), or Leon list no SKU for this tier
+       (Hz33 on either MatchMount). */
+    if (pos && pos.route === "contact") return at("bracket");
     if (pos && pos.tierSku && tierOf(c) && !pos.tierSku[tierOf(c)]) return at("bracket");
   }
   if (P.finish && c.finish === "custom" && P.finish.custom.reason) return at("finish");
@@ -1753,14 +2025,15 @@ function summaryFor(id){
     case "model":    { const bl = baseLine(c, bandFor(c));
                        const m  = modelById(c, c.model);
                        return bl ? bl.sku : (m ? m.name : ""); }
-    case "mount":    return (P && P.mounting
-                        ? (P.mounting.find(m => m.id === c.mount) || {}).label : "") || "";
     case "bracket":  { if (!P || !P.brackets) return "";
-                       if (c.bracket === "none") return P.brackets.none.label;
-                       if (c.bracket === "dual") return P.brackets.dual.label;
+                       if (c.bracket === "none")
+                         return P.brackets.none ? P.brackets.none.label : "";
                        const br  = bracketLine(c);
                        const pos = P.brackets.positions.find(x => x.id === c.bracket);
-                       return br ? `${pos.label} · ${br.sku}` : (pos ? pos.label : ""); }
+                       if (!pos) return "";
+                       return br
+                         ? `${pos.label} · ${br.sku}${br.qty > 1 ? ` × ${br.qty}` : ""}`
+                         : pos.label; }
     case "finish":   { const f = finishById(c, c.finish); return f ? (f.name || f.label) : ""; }
     case "grille":   return c.grille.type === "designer"
                         ? "Designer — " + (colourById(c, c.grille.colour) || {}).name
@@ -1847,7 +2120,6 @@ function stepBody(id){
     case "channels": return bodyChannels();
     case "size":     return bodySize();
     case "model":    return bodyModel();
-    case "mount":    return bodyMount();
     case "bracket":  return bodyBracket();
     case "finish":   return bodyFinish();
     case "grille":   return bodyGrille();
@@ -1965,30 +2237,50 @@ function bodyBracket(){
   const c = state.cfg;
   const P = curP();
   const B = P.brackets;
-  let h = `<p class="note step-help">${esc(B.help)}</p><div class="options stack">`;
+  let h = `<p class="note step-help">${esc(B.help)}</p>`;
+  /* Which way the speaker behaves when the screen moves is the decision a
+     dealer on a swing arm is actually making, so it is said once up front
+     rather than left to be inferred from four sub-lines. */
+  if (B.movementHelp)
+    h += `<p class="note step-help">${esc(B.movementHelp)}</p>`;
+  h += `<div class="options stack">`;
 
   B.positions.forEach(pos => {
-    const line    = bracketLineFor(c, pos);
-    const unknown = !!pos.tierSku && !line;      // no bracket listed for this tier
-    const tag     = unknown ? "Ask us" : (line ? "+" + money(line.dealer) : "");
-    const sub     = line ? `${line.sku} · ${pos.sub}` : pos.sub;
+    const line = bracketLineFor(c, pos);
+    /* Three states an option can be in: routed by Leon's own silence, listed
+       with no SKU for this tier, or a real priced (or included) line. */
+    const unknown = !pos.route && !!pos.tierSku && !line;
+    let tag = "";
+    if (pos.route)          tag = "Ask us";
+    else if (unknown)       tag = "Ask us";
+    else if (line && line.included) tag = pos.includedTag || "Included";
+    else if (line)          tag = "+" + money(line.dealer);
+
+    const sub = line ? `${line.sku}${line.qty > 1 ? ` × ${line.qty}` : ""} · ${pos.sub}`
+                     : pos.sub;
     h += `<button class="opt" data-pick="bracket" data-val="${pos.id}" aria-pressed="${c.bracket === pos.id}">
         <span class="label">${esc(pos.label)}</span>
         <span class="sub">${esc(sub)}</span>
         ${tag ? `<span class="tag">${esc(tag)}</span>` : ""}
       </button>`;
   });
+  h += `</div>`;
 
-  h += `</div><div class="options stack" style="margin-top:10px">
-      <button class="opt quiet" data-pick="bracket" data-val="dual" aria-pressed="${c.bracket === "dual"}">
-        <span class="label">${esc(B.dual.label)}</span>
-        <span class="sub">${esc(B.dual.sub)}</span>
-      </button>
-      <button class="opt quiet" data-pick="bracket" data-val="none" aria-pressed="${c.bracket === "none"}">
-        <span class="label">${esc(B.none.label)}</span>
-        <span class="sub">${esc(B.none.sub)}</span>
-      </button>
-    </div>`;
+  /* Say why the count doubled before a dealer wonders whether it's a bug. */
+  const chosen = bracketPosFor(c);
+  const chosenLine = bracketLine(c);
+  if (chosenLine && chosenLine.qty > 1)
+    h += `<p class="note" style="margin-top:14px;max-width:52ch">${esc(LEON.meta.twinBracketWhy)}</p>`;
+  else if (chosen && bracketAllowanceFor(c))
+    h += `<p class="note" style="margin-top:14px;max-width:52ch">${esc(LEON.meta.bracketAllowanceNote)}</p>`;
+
+  if (B.none)
+    h += `<div class="options stack" style="margin-top:10px">
+        <button class="opt quiet" data-pick="bracket" data-val="none" aria-pressed="${c.bracket === "none"}">
+          <span class="label">${esc(B.none.label)}</span>
+          <span class="sub">${esc(B.none.sub)}</span>
+        </button>
+      </div>`;
   return h;
 }
 
@@ -2085,6 +2377,17 @@ function bodySize(){
       <span class="note">${esc(T.modelHelp)}</span>
     </div>`;
 
+  /* bezel — FrameBar only, because it is the only product Leon finish to
+     match a bezel. Its own box, directly under the model it belongs to. */
+  if (T.bezelLabel){
+    h += `<div class="field" style="margin-top:26px">
+        <label for="tvbezel">${esc(T.bezelLabel)}</label>
+        <input class="txt wide" id="tvbezel" type="text" autocomplete="off" spellcheck="false"
+               value="${esc(c.tvBezel || "")}" placeholder="${esc(T.bezelPlaceholder || "")}">
+        <span class="note">${esc(T.bezelHelp)}</span>
+      </div>`;
+  }
+
   /* diagonal */
   h += `<div class="field" style="margin-top:26px">
       <label for="diag">Screen diagonal</label>
@@ -2165,21 +2468,6 @@ function refreshSizeStep(){
   }
   if (next) next.disabled = !(tvComplete(c) && band && !blockFor(c));
   renderRail();
-}
-
-function bodyMount(){
-  const c = state.cfg;
-  const P = curP();
-  let h = `<p class="note step-help">The bracket and the grille are in the box. Below the screen is the standard build.</p>
-    <div class="options stack">`;
-  P.mounting.forEach(m => {
-    h += `<button class="opt" data-pick="mount" data-val="${m.id}" aria-pressed="${c.mount === m.id}">
-        <span class="label">${esc(m.label)}</span>
-        <span class="sub">${esc(m.sub)}</span>
-        ${m.tag ? `<span class="tag">${esc(m.tag)}</span>` : ""}
-      </button>`;
-  });
-  return h + `</div>`;
 }
 
 function bodyGrille(){
@@ -2271,17 +2559,19 @@ function contactPanel(routeId){
                if (k) rows.push(["In the frame", `${k.label} · ${k.sku}`]); }
   if (c.channels) rows.push(["Channels", (channelById(c, c.channels)||{}).label]);
   if (tvLabel(c)) rows.push(["TV", tvLabel(c)]);
+  { const T = (P||{}).tv;
+    if (T && T.bezelLabel)
+      rows.push(["Bezel", (c.tvBezel||"").trim() || "To confirm"]); }
   if (c.diagonal != null) rows.push(["Screen", c.diagonal + "″"]);
   if (c.model){ const bl = baseLine(c, bandFor(c)); const m = modelById(c, c.model);
                 rows.push(["Cabinet", bl ? bl.sku : (m||{}).name]); }
   if (c.bracket && P && P.brackets){
     const br  = bracketLine(c);
     const pos = P.brackets.positions.find(x => x.id === c.bracket);
-    rows.push(["Mounting", c.bracket === "dual" ? P.brackets.dual.label
-             : c.bracket === "none" ? P.brackets.none.label
-             : br ? `${pos.label} · ${br.sku}` : `${(pos||{}).label} — bracket to confirm`]);
+    rows.push(["Mounting", c.bracket === "none" ? (P.brackets.none||{}).label
+             : br ? `${pos.label} · ${br.sku}${br.qty > 1 ? ` × ${br.qty}` : ""}`
+                  : `${(pos||{}).label} — bracket to confirm`]);
   }
-  if (c.mount && P && P.mounting) rows.push(["Position", (P.mounting.find(m=>m.id===c.mount)||{}).label]);
   if (c.finish){ const f = finishById(c, c.finish); if (f) rows.push(["Finish", f.name || f.label]); }
   if (c.grille.type) rows.push(["Grille", c.grille.type === "designer"
       ? "Designer — " + ((colourById(c, c.grille.colour)||{}).name || "colour TBC")
@@ -2342,9 +2632,15 @@ function renderRail(){
   let h = "";
   /* Preview the price once the band is known, filling in whatever standard
      answers the dealer hasn't reached yet. */
+  /* Fill in only the bracket that costs nothing to assume — one Leon put in
+     the box. Horizon's are all priced, so presuming one would quietly inflate
+     the preview before the dealer has chosen where the speaker sits. */
+  const freeBracket = P && P.brackets
+    ? (P.brackets.positions.find(x => x.includedSku) || {}).id || null
+    : null;
   const shown = p || (bandBase && !route && !blockFor(c)
       ? priceConfig({ ...c,
-          mount: c.mount || (P && P.mounting ? "below" : null),
+          bracket: c.bracket || freeBracket,
           finish: c.finish || (P && P.finish ? P.finish.options[0].id : null),
           grille:{ type:c.grille.type || "standard", colour:c.grille.colour } })
       : null);
@@ -2473,6 +2769,12 @@ function renderOutput(){
       <div class="note" style="text-align:right">Dealer prices, ex VAT</div>
     </div>`;
 
+  /* Directly under the title, before a single price is read. */
+  h += `<div class="shipbar">
+      <span class="big">${esc(M.shippingLoud)}</span>
+      <span class="small">${esc(M.shippingNote)}</span>
+    </div>`;
+
   h += `<table><thead><tr>
       <th style="width:44px">#</th>
       <th>Line</th>
@@ -2496,7 +2798,18 @@ function renderOutput(){
 
   h += `</tbody><tfoot>
       <tr><td colspan="3" class="r">Dealer total, ex VAT</td><td class="r tabular">${money(t.dealer)}</td></tr>
-    </tfoot></table>`;
+      <tr><td colspan="4" class="shipfoot">${esc(M.shippingLoud)} ${esc(M.shippingNote)}</td></tr>`;
+
+  /* The second-bracket allowance, next to the number it might change. Never
+     added to the total — it is money to keep back, not money owed. */
+  if (t.bracketAllowance && (t.bracketAllowance.amount || t.bracketAllowance.unknown)){
+    const a = t.bracketAllowance;
+    h += `<tr><td colspan="4" class="allow">${esc(M.bracketAllowanceNote)} ${
+      a.amount ? `Allow a further ${money(a.amount)} if so${a.unknown ? ", and we'd confirm the included-bracket lines with Leon" : ""}.`
+               : "Where the bracket is in the box, we'd confirm the cost of a second with Leon before order."}</td></tr>`;
+  }
+
+  h += `</tfoot></table>`;
 
   h += `<div class="terms">
       <p class="note"><strong style="font-weight:500;color:var(--ink)">${esc(M.quoteNote)}</strong></p>
@@ -2531,6 +2844,9 @@ function sheetText(){
   L.push(`LEON ${(t.productNames.join(" + ") || LEON.family.name).toUpperCase()} — CONFIGURATION & PRICE LIST`);
   L.push(`${state.dealer || "CAVD"} · ${new Date().toLocaleDateString("en-GB")}`);
   L.push("");
+  /* Same placement as the sheet — above the prices, not buried under them. */
+  L.push(`** ${M.shippingLoud.toUpperCase()} ${M.shippingNote} **`);
+  L.push("");
   state.basket.forEach((item, i) => {
     L.push(`${i+1}. ${item.price.sku}  ×${item.qty}`);
     L.push(`   ${describe(item.cfg)}`);
@@ -2540,6 +2856,13 @@ function sheetText(){
     L.push("");
   });
   L.push(`DEALER TOTAL, EX VAT: ${money(t.dealer)}`);
+  L.push(`${M.shippingLoud.toUpperCase()} ${M.shippingNote}`);
+  if (t.bracketAllowance && (t.bracketAllowance.amount || t.bracketAllowance.unknown)){
+    const a = t.bracketAllowance;
+    L.push(`${M.bracketAllowanceNote} ${a.amount
+      ? `Allow a further ${money(a.amount)} if so.`
+      : "Where the bracket is in the box, we'd confirm the cost of a second with Leon before order."}`);
+  }
   L.push("");
   L.push(M.quoteNote);
   L.push(M.shippingNote + " These are not delivered prices.");
@@ -2570,17 +2893,19 @@ function enquiryText(routeId){
   if (c.channels) L.push(`· Channels: ${(channelById(c, c.channels)||{}).label}`);
   if (tvBrandName(c)) L.push(`· TV brand: ${tvBrandName(c)}`);
   if ((c.tvModel||"").trim()) L.push(`· TV model: ${c.tvModel.trim()}`);
+  { const T = (P||{}).tv;
+    if (T && T.bezelLabel)
+      L.push(`· ${T.bezelLabel}: ${(c.tvBezel||"").trim() || "to confirm"}`); }
   if (c.diagonal != null) L.push(`· Screen: ${c.diagonal}″`);
   if (c.model){ const bl = baseLine(c, bandFor(c));
                 L.push(`· Cabinet: ${bl ? bl.sku : (modelById(c, c.model)||{}).name}`); }
   if (c.bracket && P && P.brackets){
     const br  = bracketLine(c);
     const pos = P.brackets.positions.find(x => x.id === c.bracket);
-    L.push(`· Mounting: ${c.bracket === "dual" ? P.brackets.dual.label
-          : c.bracket === "none" ? P.brackets.none.label
-          : br ? `${pos.label} — ${br.sku}` : `${(pos||{}).label} — bracket to confirm`}`);
+    L.push(`· Mounting: ${c.bracket === "none" ? (P.brackets.none||{}).label
+          : br ? `${pos.label} — ${br.sku}${br.qty > 1 ? ` × ${br.qty}` : ""}`
+               : `${(pos||{}).label} — bracket to confirm`}`);
   }
-  if (c.mount && P && P.mounting) L.push(`· Position: ${(P.mounting.find(m=>m.id===c.mount)||{}).label}`);
   if (c.finish){ const f = finishById(c, c.finish); if (f) L.push(`· Finish: ${f.name || f.label}`); }
   if (c.grille.type) L.push(`· Grille: ${c.grille.type === "designer"
       ? "Designer — " + ((colourById(c, c.grille.colour)||{}).name || "colour TBC") : "Standard Black"}`);
@@ -2677,8 +3002,6 @@ function wireSteps(){
       state.cfg.channels = v;
     } else if (k === "model"){
       state.cfg.model = v;
-    } else if (k === "mount"){
-      state.cfg.mount = v;
     } else if (k === "bracket"){
       state.cfg.bracket = v;
     } else if (k === "grille"){
@@ -2725,6 +3048,7 @@ function wireSteps(){
   };
   wireText("#tvbrand", "tvBrandOther");
   wireText("#tvmodel", "tvModel");
+  wireText("#tvbezel", "tvBezel");
 
   const diag = root.querySelector("#diag");
   if (diag){
