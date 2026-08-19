@@ -417,6 +417,13 @@ p{margin:0}
 }
 .shipbar .big{font-size:16.5px;font-weight:500;color:var(--ink);letter-spacing:-0.01em}
 .shipbar .small{font-size:13.5px;color:var(--muted)}
+
+/* Rendered only when a detail is genuinely outstanding, so it can afford to
+   be louder than the shipping bar above it. --warn is the palette's one alert
+   tone; the extra weight is what carries it if colour is dropped on print. */
+.confirmbar{border-color:var(--warn);background:var(--oak-wash)}
+.confirmbar .big{color:var(--warn);font-weight:600}
+.confirmbar .small{color:var(--ink-80)}
 .sheet tfoot td.shipfoot{
   padding-top:10px;font-size:13.5px;color:var(--ink);font-weight:500;text-align:right;
 }
@@ -462,6 +469,10 @@ p{margin:0}
   /* The shipping bar is the whole point of the sheet being unambiguous —
      it must survive the PDF, and keep its rule when colours are dropped. */
   .shipbar{border-color:#000 !important;break-inside:avoid;page-break-inside:avoid}
+  /* Greyscale turns --warn into a mid grey that reads WEAKER than the rule
+     above it, so the printed version drops the colour and keeps the weight. */
+  .confirmbar{background:transparent !important}
+  .confirmbar .big{color:#000 !important;font-weight:600}
   /* Keep the co-branding on the printed sheet, in colour */
   .sheet-marks{border-bottom-color:#ccc}
   .logo-cavd path{fill:var(--cavd-blue) !important;
@@ -640,6 +651,17 @@ const LEON = {
     twinBracketWhy: "Two mounting points — Leon specify a second bracket from 75″ up.",
     bracketAllowanceNote: "Leon may recommend a second bracket for support on a wide cabinet.",
     quoteNote: "This is a price list, not a quote. Send it over and we'll come back with an official quote.",
+    /* The TV model is optional, because it changes nothing about the price —
+       a dealer ballparking a job shouldn't have to go and find the box. But it
+       IS required to order: Leon cut the frame and place the bracket to the
+       exact set. So a blank one is never silently dropped. It prints inline on
+       the line via tvLabel(), and it raises this bar at the top of the sheet,
+       loud and above the prices for the same reason the shipping note is.
+       Dealer feedback, 19 August 2026. */
+    confirmLoud: "Not ready to quote yet.",
+    confirmLead: "Still to confirm:",
+    modelMissing: "model to confirm",
+    modelMissingItem: "TV model",
     /* A browser cannot attach a file to an email — mailto: has no attachment
        parameter — so there is no button that both opens a draft and encloses
        the PDF. The dealer saves the sheet and sends it themselves, which means
@@ -733,8 +755,8 @@ const LEON = {
     tv: {
       brands:["Samsung","LG","Sony","Philips","Hisense","TCL","Panasonic"],
       otherLabel:"Another brand",
-      why:"Leon build to your exact screen, to the millimetre — so they need the model, not just the size. On some lines that's also how they place the cut-outs for the logo and the IR window.",
-      modelHelp:"Exactly as it reads on the box or the back of the set."
+      why:"Leon build to your exact screen, to the millimetre, so they need the model at order — not just the size. On some lines that's also how they place the cut-outs for the logo and the IR window. It doesn't change the price, so you can leave it for now.",
+      modelHelp:"Leave it blank if it's yet to be confirmed."
     },
     diagonal: { min:24, max:120, overMaxRoute:"contact" },
     sizeBands: [
@@ -882,8 +904,8 @@ const LEON = {
     tv: {
       brands:["Samsung","LG","Sony","Philips","Hisense","TCL","Panasonic"],
       otherLabel:"Another brand",
-      why:"The case is built to match your screen, so Leon need the exact set — not just the size.",
-      modelHelp:"Exactly as it reads on the box or the back of the set."
+      why:"The case is built to match your screen, so Leon need the exact set at order — not just the size. It doesn't change the price, so you can leave it for now.",
+      modelHelp:"Leave it blank if it's yet to be confirmed."
     },
     diagonal: { min:24, max:120, overMaxRoute:"contact" },
     sizeBands: [
@@ -977,8 +999,8 @@ const LEON = {
     tv: {
       brands:["Samsung","LG","Sony","Philips","Hisense","TCL","Panasonic"],
       otherLabel:"Another brand",
-      why:"Horizon is built to the width of your screen, so Leon need the exact set — the model, not just the size. It's also how they place the cut-outs if you take the contoured grille.",
-      modelHelp:"Exactly as it reads on the box or the back of the set."
+      why:"Horizon is built to the width of your screen, so Leon need the exact set at order — the model, not just the size. It's also how they place the cut-outs if you take the contoured grille. It doesn't change the price, so you can leave it for now.",
+      modelHelp:"Leave it blank if it's yet to be confirmed."
     },
     diagonal: { min:24, max:120, overMaxRoute:"contact" },
     /* `idx` picks the column out of each model's channels × band grid. */
@@ -1148,9 +1170,9 @@ const LEON = {
        deliberately absent here — bodySize hides it when otherLabel is unset. */
     tv: {
       brands:["Samsung"],
-      why:"FrameBar is built to the width of a Samsung Frame and finished to match its bezel, so Leon need the exact set — the model and the year, not just the size.",
+      why:"FrameBar is built to the width of a Samsung Frame and finished to match its bezel, so Leon need the exact set at order — the model and the year, not just the size. Neither changes the price, so you can leave them for now.",
       modelLabel:"Frame model and year",
-      modelHelp:"As it reads on the box, with the year.",
+      modelHelp:"Leave it blank if it's yet to be confirmed.",
       modelPlaceholder:"e.g. QE65LS03D 2024",
       /* Its own field rather than a line in modelHelp, because Leon match the
          FrameBar finish to the bezel and the colour is the part they match
@@ -1162,7 +1184,8 @@ const LEON = {
       bezelLabel:"Frame bezel finish and colour",
       bezelHelp:"Leon match the FrameBar to the Samsung bezel, so the colour matters as much as the size. Add the bezel SKU too if you have it.",
       bezelPlaceholder:"e.g. Teak · VG-SCFA65TKB",
-      bezelMissing:"bezel finish and colour to confirm"
+      bezelMissing:"bezel finish and colour to confirm",
+      bezelItem:"Frame bezel finish"
     },
     /* Leon list FrameBar to 90″ and no further — over that is a conversation,
        and it is a different one from Horizon's, so it gets its own route. */
@@ -1261,7 +1284,7 @@ const LEON = {
     order: 5,
     steps: ["core","size","finish","grille","extras"],
     intro: "A magnetic frame cut to your screen, so the TV reads as a framed piece rather than a black rectangle.",
-    pickLine: "Frames the screen. Speaker optional — you pick what sits in it.",
+    pickLine: "A frame around the screen and/or soundbar, in seven finishes.",
     railNote: "Frame, wall plate and adjustable Sanus TV bracket are in every Edge.",
 
     /* ---- step: what the frame is built around ---- */
@@ -1318,15 +1341,21 @@ const LEON = {
       { id:"prseven",    sku:"EDGE-PrSEVEN",    group:"profile", includes:true,
         label:"PrSEVEN — stereo",       sub:"7″ flagship, left and right",    price:9810 },
 
-      { id:"tv",         sku:"EDGE-TV",         group:"none", includes:false,
+      /* Nothing sits behind the frame, so there is no aperture to cover and
+         no grille to choose, and nothing for "(supplied separately)" to refer
+         to. Dealer feedback, 19 August 2026: the grille step was still being
+         asked on a stand-alone frame. The other groups DO take one — Leon
+         conceal a supplied Sonos behind AcousTex the same way Tc Fit does, and
+         EDGE-SPB says outright that it "includes the grille". */
+      { id:"tv",         sku:"EDGE-TV",         group:"none", includes:false, noSpeaker:true,
         label:"Frame only",      sub:"No speaker in the system", price:2165 }
     ],
 
     tv: {
       brands:["Samsung","LG","Sony","Philips","Hisense","TCL","Panasonic"],
       otherLabel:"Another brand",
-      why:"The frame is cut to the exact set and the bracket is sized to it, so Leon need the model, not just the diagonal.",
-      modelHelp:"Exactly as it reads on the box or the back of the set."
+      why:"The frame is cut to the exact set and the bracket is sized to it, so Leon need the model at order — not just the diagonal. It doesn't change the price, so you can leave it for now.",
+      modelHelp:"Leave it blank if it's yet to be confirmed."
     },
     /* Leon: "For TVs 75″–90″ diag., add £570. For TVs >90″ diag. call for
        quote. **Some restrictions apply." So 90″ is a hard stop, not an adder. */
@@ -1526,9 +1555,20 @@ const money = n => M.currency + Number(n).toLocaleString("en-GB",
    dealer forwards. Say it in words instead. */
 const lineMoney = n => Number(n) === 0 ? "No charge" : money(n);
 
+/* A grille covers a speaker. Where the configuration has no speaker in it,
+   there is nothing to cover, so the step is not asked and any answer already
+   given stops counting — the same defensive rule as addOnAvailable(), so
+   changing the core cannot strand a choice that no longer applies. */
+function grilleApplies(cfg){
+  const core = coreById(cfg, cfg.core);
+  return !(core && core.noSpeaker);
+}
+
 const stepsFor = cfg => {
   const P = prodOf(cfg);
-  return ["product"].concat(P ? P.steps : []);
+  const steps = P ? P.steps : [];
+  return ["product"].concat(
+    grilleApplies(cfg) ? steps : steps.filter(id => id !== "grille"));
 };
 
 const bandFor = (cfg, d) => {
@@ -1796,7 +1836,7 @@ function priceConfig(cfg){
   const fin = finishById(cfg, cfg.finish);
   if (fin && fin.price) lines.push({ sku:"Custom finish", label:fin.label, dealer:fin.price });
 
-  if (cfg.grille.type === "designer" && cfg.grille.colour){
+  if (grilleApplies(cfg) && cfg.grille.type === "designer" && cfg.grille.colour){
     const c = colourById(cfg, cfg.grille.colour);
     lines.push({ sku:"Designer grille", label:`Designer grille fabric — ${c.name}`, dealer:designerPrice(cfg) });
   }
@@ -1833,7 +1873,11 @@ function fixedBrand(P){
 function tvComplete(c){
   if (!c.tvBrand && !fixedBrand(prodOf(c))) return false;
   if (c.tvBrand === "__other" && !(c.tvBrandOther || "").trim()) return false;
-  return !!(c.tvModel || "").trim();
+  /* The model deliberately does NOT gate this. Nothing in the price engine
+     reads it — the band comes off the diagonal alone — so blocking here only
+     stopped a dealer getting a ballpark. Leon still can't build without it,
+     which is what outstandingFor() and the sheet's confirm bar are for. */
+  return true;
 }
 function tvBrandName(c){
   if (c.tvBrand === "__other") return (c.tvBrandOther || "").trim();
@@ -1842,7 +1886,42 @@ function tvBrandName(c){
   return c.tvBrand || fixedBrand(prodOf(c)) || "";
 }
 function tvLabel(c){
-  return [tvBrandName(c), (c.tvModel || "").trim()].filter(Boolean).join(" ");
+  const brand = tvBrandName(c);
+  const model = (c.tvModel || "").trim();
+  if (model) return [brand, model].filter(Boolean).join(" ");
+  /* Same reasoning as bezelLabel() and Tc Fit's offLabel: on the sheet a
+     dealer forwards, "Samsung" and "Samsung QE65QN90D" must not look like the
+     same amount of information. Brand alone reads as complete; it isn't. */
+  return brand ? `${brand} — ${M.modelMissing}` : "";
+}
+
+/* What is still missing before this configuration could be quoted or ordered.
+   Returns plain labels, in the order a dealer meets them on the steps. Money
+   caveats (the second-bracket allowance) are NOT in here — those are things to
+   allow for, not things to go and find out. */
+function outstandingFor(cfg){
+  const P = prodOf(cfg);
+  if (!P) return [];
+  const out = [];
+  if (!(cfg.tvModel || "").trim()) out.push(M.modelMissingItem);
+  const T = P.tv;
+  if (T && T.bezelLabel && !(cfg.tvBezel || "").trim()) out.push(T.bezelItem || T.bezelLabel);
+  return out;
+}
+
+/* Across the whole basket. Qualified by product once there is more than one
+   line, or "TV model" twice tells the dealer nothing about which one. */
+function basketOutstanding(){
+  const multi = state.basket.length > 1;
+  const seen = [];
+  state.basket.forEach(item => {
+    const name = (prodOf(item.cfg) || {}).name || "";
+    outstandingFor(item.cfg).forEach(label => {
+      const s = multi && name ? `${label} (${name})` : label;
+      if (!seen.includes(s)) seen.push(s);
+    });
+  });
+  return seen;
 }
 /* FrameBar's bezel, for anywhere the config is written out. It prints whether
    or not it was filled in: Leon match the FrameBar finish to this, so a blank
@@ -1867,7 +1946,8 @@ function describe(cfg){
   /* Say outright whether the speaker is in the price — this line prints on the
      sheet a dealer forwards, and "Edge with Hz44UX" reads as included either
      way unless we spell it out. */
-  if (core) bits.push(core.label + (core.includes ? "" : " (supplied separately)"));
+  if (core) bits.push(core.label +
+    (core.includes || core.noSpeaker ? "" : " (supplied separately)"));
   const ch = channelById(cfg, cfg.channels);
   if (ch) bits.push(ch.label.toLowerCase());
   const tv = tvLabel(cfg);
@@ -1898,9 +1978,11 @@ function describe(cfg){
     const f = finishById(cfg, cfg.finish);
     if (f) bits.push((f.name || f.label) + " finish");
   }
-  if (cfg.grille.type === "standard") bits.push("standard black grille");
-  if (cfg.grille.type === "designer" && cfg.grille.colour)
-    bits.push("designer grille — " + colourById(cfg, cfg.grille.colour).name);
+  if (grilleApplies(cfg)){
+    if (cfg.grille.type === "standard") bits.push("standard black grille");
+    if (cfg.grille.type === "designer" && cfg.grille.colour)
+      bits.push("designer grille — " + colourById(cfg, cfg.grille.colour).name);
+  }
   cfg.addOns.forEach(id => {
     const a = P.addOns.find(x => x.id === id);
     if (a && addOnAvailable(cfg, a)) bits.push(a.label);
@@ -2775,6 +2857,18 @@ function renderOutput(){
       <span class="small">${esc(M.shippingNote)}</span>
     </div>`;
 
+  /* Only when something is actually missing. A bar that prints on every sheet
+     becomes wallpaper and gets skimmed past — which is the exact failure the
+     shipping note had before it was made conditional on nothing and loud on
+     everything. This one earns its place by being rare. */
+  const missing = basketOutstanding();
+  if (missing.length){
+    h += `<div class="shipbar confirmbar">
+        <span class="big">${esc(M.confirmLoud)}</span>
+        <span class="small">${esc(M.confirmLead)} ${esc(missing.join(", "))}.</span>
+      </div>`;
+  }
+
   h += `<table><thead><tr>
       <th style="width:44px">#</th>
       <th>Line</th>
@@ -2846,6 +2940,9 @@ function sheetText(){
   L.push("");
   /* Same placement as the sheet — above the prices, not buried under them. */
   L.push(`** ${M.shippingLoud.toUpperCase()} ${M.shippingNote} **`);
+  const missingT = basketOutstanding();
+  if (missingT.length)
+    L.push(`** ${M.confirmLoud.toUpperCase()} ${M.confirmLead} ${missingT.join(", ")}. **`);
   L.push("");
   state.basket.forEach((item, i) => {
     L.push(`${i+1}. ${item.price.sku}  ×${item.qty}`);
